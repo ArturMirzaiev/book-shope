@@ -35,7 +35,8 @@ namespace BookStoreApp.Features.BookFeatrues.Handlers
                 Price = request.Price,
                 Quantity = request.Quantity,
                 Authors = authors,
-                Categories = categories
+                Categories = categories,
+                ImageUrl = request.ImageUrl
             };
 
             _context.Books.Add(book);

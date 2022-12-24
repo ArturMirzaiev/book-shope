@@ -16,7 +16,9 @@ namespace BookStoreApp.Domain.Repositories.Repository
 
         public async Task<IEnumerable<Author>> GetAuthors()
         {
-            return await _context.Authors.ToListAsync();
+            return await _context.Authors
+                .Include(a => a.Books)
+                    .ThenInclude(b => b.Categories).ToListAsync();
         }
 
         public async Task<Author> InsertAuthor(Author author)
