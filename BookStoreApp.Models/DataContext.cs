@@ -16,7 +16,8 @@ namespace BookStoreApp.Data
         {
             modelBuilder.ApplyConfigurationsFromAssembly(typeof(DataContext).Assembly);
 
-            modelBuilder.Entity<User>().HasKey(u => u.PasswordHash);
+            modelBuilder.Entity<User>()
+                .HasKey(u => u.PasswordHash);
         }
     }
 }

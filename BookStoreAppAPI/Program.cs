@@ -2,6 +2,8 @@ using BookStoreApp.Data;
 using BookStoreApp.Data.Mapping;
 using BookStoreApp.Features;
 using BookStoreApp.Services;
+using FluentValidation;
+using FluentValidation.AspNetCore;
 using MediatR;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
@@ -19,6 +21,9 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 builder.Services.AddHttpContextAccessor();
 
+builder.Services.AddValidatorsFromAssemblyContaining<MediatRFeaturesEntryPoint>();
+builder.Services.AddFluentValidation();
+
 builder.Services.AddMediatR(typeof(MediatRFeaturesEntryPoint).Assembly);
 builder.Services.AddAutoMapper(typeof(MappingProfile).Assembly);
 
@@ -33,9 +38,9 @@ builder.Services.AddSwaggerGen(options =>
         Name = "Authorization",
         Type = SecuritySchemeType.ApiKey
     });
-
     options.OperationFilter<SecurityRequirementsOperationFilter>();
 });
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {

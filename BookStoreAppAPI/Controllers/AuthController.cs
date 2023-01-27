@@ -4,10 +4,13 @@ using BookStoreApp.Data.DTO;
 using BookStoreApp.Data.Entities;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.ModelBinding.Binders;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using System.IdentityModel.Tokens.Jwt;
+using System.Reflection.Metadata.Ecma335;
 using System.Security.Claims;
 using System.Security.Cryptography;
 
@@ -17,16 +20,6 @@ namespace BookStoreApp.Controllers
     [ApiController]
     public class AuthController : ControllerBase
     {
-        public static User user = new User();
-        /* статический объект, хранящий в себе
-                        UserName    string
-                        PasswordHash   byte[]
-                        PasswordSalt    byte[]
-                        RefreshToken    string
-                        TokenCreated    DateTime
-                        TokenExpires    DateTime
-        */
-
         public IConfiguration _configuration;
         private readonly DataContext _context;
         private readonly IHttpContextAccessor _httpContextAccessor;
@@ -38,25 +31,14 @@ namespace BookStoreApp.Controllers
             _httpContextAccessor = httpContextAccessor;
         }
 
-        [HttpGet, Authorize]
-        public ActionResult<string> GetMe()
-        {
-            var result = string.Empty;
-
-            if (_httpContextAccessor.HttpContext != null)
-            {
-                result = _httpContextAccessor.HttpContext.User.FindFirstValue(ClaimTypes.Name);
-            }
-
-            return Ok(result);
-        }
-
         [HttpPost("refresh-token")]
         public async Task<ActionResult<string>> RefreshToken()
         {
             var refreshToken = Request.Cookies["refreshToken"];
 
-            if (!user.RefreshToken.Equals(refreshToken))
+            var user = await _context.Users.FirstOrDefaultAsync(s => s.RefreshToken == refreshToken);
+
+            if (user == null)
             {
                 return Unauthorized("Invalid Refresh Token.");
             }
@@ -67,55 +49,76 @@ namespace BookStoreApp.Controllers
 
             string token = CreateToken(user);
             var newRefreshToken = GenerateRefreshToken();
-            SetRefreshToken(newRefreshToken);
+            SetRefreshToken(newRefreshToken, user);
+            await _context.SaveChangesAsync();
 
-            return Ok(token);
+            return Ok(
+                new
+                {
+                    Token = token
+                });
         }
 
         [HttpPost("register")]
-        public async Task<ActionResult<User>> Register(UserDTO userDTO) // username and password
+        public async Task<ActionResult> Register(UserDTO userDTO)
         {
             CreatePasswordHash(userDTO.Password, out byte[] passwordHash, out byte[] passwordSalt);
-            // создаем PasswrodHash и PasswordSalt для текущего статического объекта
-            user.UserName = userDTO.UserName;
-            user.PasswordHash = passwordHash;
-            user.PasswordSalt = passwordSalt;
-            // вносим данные для хранения в статическом объекте
-            _context.Users.Add(user);
-            _context.SaveChanges();
-            // добавляем в БД
-            return Ok(user);
+
+            var user = new User
+            {
+                UserName = userDTO.UserName,
+                FirstName = userDTO.FirstName,
+                LastName = userDTO.LastName,
+                Email = userDTO.Email,
+                PasswordHash = passwordHash,
+                PasswordSalt = passwordSalt,
+                Role = userDTO.Role
+            };
+
+            await _context.Users.AddAsync(user);
+            await _context.SaveChangesAsync();
+
+            return Ok("Registration completed successfully!");
         }
 
-
         [HttpPost("login")]
-        public async Task<ActionResult<string>> Login(UserDTO userDTO) // логинимся с помощью username & password
+        public async Task<ActionResult<string>> Login(UserShortDTO userDTO) 
         {
-            if (user.UserName != userDTO.UserName)
+            if (userDTO == null)
             {
                 return BadRequest("User not found!");
             }
-            // если не нашли такой никнейм => отправялем BadRequest("User not Found")
+
+            var user = await _context.Users.FirstOrDefaultAsync(u => u.UserName == userDTO.UserName);
+
+            if (user == null)
+            {
+                return BadRequest("Wrong username");
+            }
 
             if (!VerifyPasswordHash(userDTO.Password, user.PasswordHash, user.PasswordSalt))
             {
                 return BadRequest("Wrong Password");
             }
-            // проверяем введенный пароль
-            // создаем Hmac по ключу который передается HMAC512(salt)
-            // и провяряем текущий password=>passwordHash с тем, что имеется в user ????
 
-            //параллельно создаем токен
             string token = CreateToken(user);
 
             var refreshToken = GenerateRefreshToken();
-            // создается новый токен => строка, длительность действия, начало создания
 
-            SetRefreshToken(refreshToken);
-            // добавляем в куки наш токен и переопределяем строку токена, длительность и начало создания
-            
-            return Ok(token);
-            // возвращаем пользователю токен, с которым далее проводит манипуляции
+            SetRefreshToken(refreshToken, user);
+            await _context.SaveChangesAsync();
+
+            return Ok(
+                new
+                {
+                    Token = token
+                });
+        }
+
+        [HttpGet("users"), Authorize]
+        public async Task<ActionResult<List<User>>> GetUsers()
+        {
+            return Ok(await _context.Users.ToListAsync());
         }
 
         private RefreshToken GenerateRefreshToken()
@@ -130,7 +133,7 @@ namespace BookStoreApp.Controllers
             return refreshToken;
         }
 
-        private void SetRefreshToken(RefreshToken newRefreshToken)
+        private void SetRefreshToken(RefreshToken newRefreshToken, User user)
         {
             var cookieOption = new CookieOptions
             {
@@ -168,28 +171,23 @@ namespace BookStoreApp.Controllers
         {
             List<Claim> claims = new List<Claim>
             {
-                new Claim(ClaimTypes.Name, user.UserName),
-                new Claim(ClaimTypes.Role, "Admin")
+                new Claim("Role", user.Role),
+                new Claim("Name", $"{user.FirstName} {user.LastName}"),
+                new Claim("Expires", user.TokenExpires.ToString())
             };
-            // создаем некие "утверждения" - доп.информация о пользователе
-            // username
-            // Role
 
             var key = new SymmetricSecurityKey(System.Text.Encoding.UTF8.GetBytes(
                 _configuration.GetSection("AppSettings:Token").Value));
-            // произвольный ключ в виде byte[] полученных с app.settings.json
 
             var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha512Signature);
 
             var token = new JwtSecurityToken(
-                claims: claims,                         // учетные данные
-                expires: DateTime.Now.AddDays(1),       // длительность действия
-                signingCredentials: creds);             // ключ шифорвания и алгоритм безопасности
-            // генерация токена
+                claims: claims,                        
+                expires: DateTime.Now.AddDays(1),       
+                signingCredentials: creds);      
 
 
             var jwt = new JwtSecurityTokenHandler().WriteToken(token);
-            // пишемт токен => получаем на выходе string
 
             return jwt;
         }

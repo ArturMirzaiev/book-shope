@@ -1,4 +1,5 @@
 ﻿using BookStoreApp.Data;
+using BookStoreApp.Data.DTO;
 using BookStoreApp.Data.Entities;
 using BookStoreApp.Domain.Repositories.Interfaces;
 using Microsoft.EntityFrameworkCore;
@@ -14,17 +15,17 @@ namespace BookStoreApp.Domain.Repositories.Repository
             _context = context;
         }
 
-        public async Task DeleteBook(Guid id)
+        public async Task<Book> DeleteBook(Guid id)
         {
             Book book = await _context.Books.FindAsync(id);
 
-            if (book == null)
+            if (book != null)
             {
                 _context.Books.Remove(book);
                 await _context.SaveChangesAsync();
             }
 
-            await Task.CompletedTask;
+            return book;
         }
 
         public async Task<Book> GetBookById(Guid id)

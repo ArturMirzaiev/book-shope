@@ -6,6 +6,7 @@ using BookStoreApp.Features.BookFeatrues.Commands;
 using BookStoreApp.Services.Services.Interfaces;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 
 namespace BookStoreApp.Features.BookFeatrues.Handlers
 {
@@ -22,27 +23,36 @@ namespace BookStoreApp.Features.BookFeatrues.Handlers
 
         public async Task<ActionResult<BookDTO>> Handle(UpdateBookCommand request, CancellationToken cancellationToken)
         {
-            var authors = _context.Authors.Where(a => request.AuthorIds.Contains(a.Id)).ToList();
+            var authors = _context.Authors.Where(a => request.AuthorIds.Contains(a.Id));
             var categories = _context.Categories.Where(c => request.CategoryIds.Contains(c.Id)).ToList();
 
-            var book = new Book
+            var bookContext = await _context.Books
+                .Include(s => s.Authors)
+                .Include(s => s.Categories)
+                    .FirstOrDefaultAsync(r=>r.Id == request.Id);
 
+            bookContext.Title = request.Title;
+            bookContext.Description = request.Description;
+            bookContext.ImageUrl = request.ImageUrl;
+            bookContext.Price = request.Price;
+            bookContext.Quantity = request.Quantity;
+            bookContext.Authors = new List<Author>();
+            bookContext.Categories = new List<Category>();
+
+            foreach (var item in authors)
             {
-                Id = request.Id,
-                Title = request.Title,
-                Description = request.Description,
-                Price = request.Price,
-                Quantity = request.Quantity,
-                Authors = authors,
-                Categories = categories
-            };
+                bookContext.Authors.Add(item);
+            }
 
-            var dbBook = _context.Books.FirstOrDefault(s => s.Id == book.Id);
+            foreach (var item in categories)
+            {
+                bookContext.Categories.Add(item);
+            }
 
-            _context.Entry(dbBook).CurrentValues.SetValues(book);
-            _context.SaveChanges();
+            _context.Books.Update(bookContext);
+            await _context.SaveChangesAsync();
 
-            return _mapper.Map<BookDTO>(book);
+            return _mapper.Map<BookDTO>(bookContext);
         }
     }
 }

@@ -44,7 +44,13 @@ namespace BookStoreApp.Controllers
         }
 
         [HttpPatch]
-        public async Task<ActionResult<BookDTO>> UpdateBook([FromBody] UpdateBookCommand command)
+        public async Task<ActionResult<BookDTO>> PatchBook([FromBody] UpdateBookCommand command)
+        {
+            return await _mediator.Send(command);
+        }
+
+        [HttpDelete("{Id}")]
+        public async Task<ActionResult<BookDTO>> DeleteBook([FromRoute] DeleteBookCommand command)
         {
             return await _mediator.Send(command);
         }

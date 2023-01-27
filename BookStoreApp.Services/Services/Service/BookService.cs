@@ -17,9 +17,10 @@ namespace BookStoreApp.Services.Services.Service
             _mapper = mapper;
         }
 
-        public async Task DeleteBook(Guid id)
+        public async Task<BookDTO> DeleteBook(Guid id)
         {
-            await _repository.DeleteBook(id);
+            var book = await _repository.DeleteBook(id);
+            return _mapper.Map<BookDTO>(book);
         }
 
         public async Task<BookDTO> GetBookById(Guid id)
