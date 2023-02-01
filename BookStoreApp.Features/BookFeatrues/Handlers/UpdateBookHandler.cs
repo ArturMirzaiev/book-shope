@@ -23,33 +23,24 @@ namespace BookStoreApp.Features.BookFeatrues.Handlers
 
         public async Task<ActionResult<BookDTO>> Handle(UpdateBookCommand request, CancellationToken cancellationToken)
         {
-            var authors = _context.Authors.Where(a => request.AuthorIds.Contains(a.Id));
-            var categories = _context.Categories.Where(c => request.CategoryIds.Contains(c.Id)).ToList();
+            var authors = await _context.Authors
+                .Where(a => request.AuthorIds.Contains(a.Id))
+                .ToListAsync();
 
-            var bookContext = await _context.Books
-                .Include(s => s.Authors)
-                .Include(s => s.Categories)
-                    .FirstOrDefaultAsync(r=>r.Id == request.Id);
+            var categories = await _context.Categories
+                .Where(c => request.CategoryIds.Contains(c.Id))
+                .ToListAsync();
+
+            var bookContext = await _context.Books.FindAsync(request.Id);
 
             bookContext.Title = request.Title;
             bookContext.Description = request.Description;
             bookContext.ImageUrl = request.ImageUrl;
             bookContext.Price = request.Price;
             bookContext.Quantity = request.Quantity;
-            bookContext.Authors = new List<Author>();
-            bookContext.Categories = new List<Category>();
+            bookContext.Authors = authors;
+            bookContext.Categories = categories;
 
-            foreach (var item in authors)
-            {
-                bookContext.Authors.Add(item);
-            }
-
-            foreach (var item in categories)
-            {
-                bookContext.Categories.Add(item);
-            }
-
-            _context.Books.Update(bookContext);
             await _context.SaveChangesAsync();
 
             return _mapper.Map<BookDTO>(bookContext);
